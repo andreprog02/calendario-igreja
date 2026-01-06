@@ -32,9 +32,13 @@ MESES_NOMES = {
 def carregar_eventos_manuais():
     if not os.path.exists(ARQUIVO_CSV):
         pd.DataFrame(columns=["id", "title", "start", "end", "color", "categoria", "local"]).to_csv(ARQUIVO_CSV, index=False)
+    
     df = pd.read_csv(ARQUIVO_CSV)
-    if 'id' not in df.columns: df['id'] = range(len(df))
-    if 'local' not in df.columns: df['local'] = LOCAL_PADRAO
+    # Limpa dados nulos que causam erro de JSON
+    df = df.dropna(subset=['title', 'start'])
+    df['categoria'] = df['categoria'].fillna('Geral')
+    df['local'] = df['local'].fillna(LOCAL_PADRAO)
+    df['id'] = df['id'].fillna(0).astype(str)
     return df
 
 def obter_eventos_catolicos(ano):
@@ -47,35 +51,34 @@ def obter_eventos_catolicos(ano):
 def gerar_pdf_agenda(eventos, mes_nome):
     pdf = FPDF()
     pdf.add_page()
-    ano_referencia = datetime.now().year
+    ano_ref = datetime.now().year
     if eventos:
-        try: ano_referencia = datetime.fromisoformat(str(eventos[0]['start'])).year
+        try: ano_ref = datetime.fromisoformat(str(eventos[0]['start'])).year
         except: pass
 
     pdf.set_font("helvetica", "B", 14)
-    pdf.cell(190, 8, "Agenda Paróquia Nossa Senhora das Dores", align="C")
-    pdf.ln(8)
+    pdf.cell(190, 8, "Agenda Paróquia Nossa Senhora das Dores", align="C", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("helvetica", "I", 10)
-    pdf.cell(190, 6, "Dorândia - Barra do Piraí/RJ", align="C")
-    pdf.ln(10)
+    pdf.cell(190, 6, "Dorândia - Barra do Piraí/RJ", align="C", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(5)
+    
     pdf.set_font("helvetica", "B", 12)
-    pdf.cell(190, 10, f"Programação Mensal: {mes_nome} / {ano_referencia}", align="L")
-    pdf.ln(12)
+    pdf.cell(190, 10, f"Programação Mensal: {mes_nome} / {ano_ref}", align="L", new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("helvetica", "B", 10)
     pdf.set_fill_color(230, 230, 230)
-    for label, width in [("DATA", 30), ("HORA", 20), ("EVENTO", 70), ("LOCAL", 70)]:
-        pdf.cell(width, 10, label, border=1, align='C', fill=True)
-    pdf.ln()
+    pdf.cell(30, 10, "DATA", border=1, align='C', fill=True)
+    pdf.cell(20, 10, "HORA", border=1, align='C', fill=True)
+    pdf.cell(70, 10, "EVENTO", border=1, align='L', fill=True)
+    pdf.cell(70, 10, "LOCAL", border=1, align='L', fill=True, new_x="LMARGIN", new_y="NEXT")
     
-    pdf.set_font("helvetica", "", 9)
     for ev in sorted(eventos, key=lambda x: str(x['start'])):
         dt = datetime.fromisoformat(str(ev['start']))
+        pdf.set_font("helvetica", "", 9)
         pdf.cell(30, 8, dt.strftime("%d/%m/%Y"), border=1, align='C')
         pdf.cell(20, 8, dt.strftime("%H:%M"), border=1, align='C')
         pdf.cell(70, 8, str(ev['title'])[:40], border=1, align='L')
-        pdf.cell(70, 8, str(ev.get('local', LOCAL_PADRAO))[:40], border=1, align='L')
-        pdf.ln()
+        pdf.cell(70, 8, str(ev.get('local', LOCAL_PADRAO))[:40], border=1, align='L', new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 
 def gerar_pdf_bingo(quantidade, festa, data_b, hora_b, premio, obs):
@@ -83,30 +86,21 @@ def gerar_pdf_bingo(quantidade, festa, data_b, hora_b, premio, obs):
     for _ in range(quantidade):
         pdf.add_page()
         serie = random.randint(100000, 999999)
-        
-        # Cabeçalho
         pdf.set_font("helvetica", "B", 20)
-        pdf.cell(190, 10, festa.upper(), align="C")
+        pdf.cell(190, 10, festa.upper(), align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_text_color(200, 0, 0)
+        pdf.cell(190, 8, f"PRÊMIO: {premio.upper()}", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("helvetica", "B", 11)
+        pdf.cell(190, 7, "Paróquia Nossa Senhora das Dores - Dorândia", align="C", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(190, 7, f"Sorteio: {data_b.strftime('%d/%m/%Y')} às {hora_b.strftime('%H:%M')}", align="C", new_x="LMARGIN", new_y="NEXT")
         pdf.ln(10)
         
-        # Prêmio (Destaque)
-        pdf.set_font("helvetica", "B", 14)
-        pdf.set_text_color(200, 0, 0) # Cor vermelha para o prêmio
-        pdf.cell(190, 8, f"PRÊMIO: {premio.upper()}", align="C")
-        pdf.set_text_color(0, 0, 0) # Volta para preto
-        pdf.ln(8)
-
-        pdf.set_font("helvetica", "B", 11)
-        pdf.cell(190, 7, "Paróquia Nossa Senhora das Dores - Dorândia", align="C")
-        pdf.ln(6)
-        pdf.cell(190, 7, f"Sorteio: {data_b.strftime('%d/%m/%Y')} às {hora_b.strftime('%H:%M')}", align="C")
-        pdf.ln(12)
-        
-        # Grade BINGO
-        pdf.set_font("helvetica", "B", 40)
         pdf.set_x(17.5)
+        pdf.set_font("helvetica", "B", 40)
         for letra in "BINGO":
-            pdf.cell(35, 22, letra, border=1, align='C')
+            pdf.cell(35, 20, letra, border=1, align='C')
         pdf.ln()
         
         faixas = {'B': range(1,16), 'I': range(16,31), 'N': range(31,46), 'G': range(46,61), 'O': range(61,76)}
@@ -120,23 +114,23 @@ def gerar_pdf_bingo(quantidade, festa, data_b, hora_b, premio, obs):
                     pdf.set_font("helvetica", "B", 30); pdf.cell(35, 25, str(nums[letra][i]), border=1, align='C')
             pdf.ln()
         
-        # Observação do Usuário
         pdf.ln(5)
         pdf.set_font("helvetica", "B", 12)
-        pdf.cell(190, 10, f"Obs: {obs}", align="C")
+        pdf.cell(190, 10, f"Obs: {obs}", align="C", new_x="LMARGIN", new_y="NEXT")
 
-        # QR Code e Autenticação
-        qr_data = f"Festa: {festa} | Premio: {premio} | Serie: {serie}"
-        qr = qrcode.make(qr_data)
-        img_buf = BytesIO()
-        qr.save(img_buf, format="PNG")
-        img_buf.seek(0)
+        qr_data = f"Dorandia Bingo | Serie: {serie} | Festa: {festa}"
+        qr = qrcode.QRCode(version=1, box_size=10, border=1)
+        qr.add_data(qr_data)
+        qr.make(fit=True)
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        tmp_img = BytesIO()
+        img_qr.save(tmp_img)
+        tmp_img.seek(0)
         
-        pdf.image(img_buf, x=160, y=210, w=30)
-        pdf.set_y(240)
+        pdf.image(tmp_img, x=160, y=215, w=30)
+        pdf.set_y(245)
         pdf.set_font("helvetica", "I", 8)
-        pdf.cell(190, 10, f"Autenticidade: {serie}", align="R")
-        
+        pdf.cell(190, 10, f"Autenticidade Série: {serie}", align="R")
     return bytes(pdf.output())
 
 # --- INTERFACE ---
@@ -146,62 +140,63 @@ eventos_cal = df_ev.to_dict('records') + obter_eventos_catolicos(datetime.now().
 st.title("⛪ Paróquia Nossa Senhora das Dores")
 st.caption("📍 Dorândia, Barra do Piraí/RJ")
 
-tab_cal, tab_bingo, tab_admin = st.tabs(["📅 Agenda", "🎲 Bingo com Prêmios", "🛠️ Administração"])
+tab_cal, tab_bingo, tab_admin = st.tabs(["📅 Agenda", "🎲 Bingo", "🛠️ Administração"])
 
 with tab_cal:
-    col_calendar, col_edit = st.columns([2, 1])
-    with col_calendar:
-        state = calendar(events=eventos_cal, options={"headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,timeGridWeek"}, "locale": "pt-br"}, key="cal_dorandia")
-    with col_edit:
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        state = calendar(events=eventos_cal, options={"headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,timeGridWeek"}, "locale": "pt-br"}, key="cal_dor")
+    with c2:
         if state.get("eventClick"):
             eid = state["eventClick"]["event"]["id"]
             if not str(eid).startswith('c'):
-                ev_data = df_ev[df_ev['id'].astype(str) == str(eid)].iloc[0]
-                with st.form("edit_form"):
-                    novo_t = st.text_input("Nome", value=ev_data['title'])
-                    nova_d = st.date_input("Data", value=datetime.fromisoformat(ev_data['start']).date(), format="DD/MM/YYYY")
-                    nova_h = st.time_input("Hora", value=datetime.fromisoformat(ev_data['start']).time())
-                    c1, c2 = st.columns(2)
-                    if c1.form_submit_button("Salvar"):
-                        iso = datetime.combine(nova_d, nova_h).isoformat()
-                        df_ev.loc[df_ev['id'].astype(str) == str(eid), ['title', 'start', 'end']] = [novo_t, iso, iso]
+                ev_sel = df_ev[df_ev['id'].astype(str) == str(eid)].iloc[0]
+                with st.form("edit"):
+                    nt = st.text_input("Nome", value=ev_sel['title'])
+                    nd = st.date_input("Data", value=datetime.fromisoformat(ev_sel['start']).date(), format="DD/MM/YYYY")
+                    nh = st.time_input("Hora", value=datetime.fromisoformat(ev_sel['start']).time())
+                    nl = st.text_input("Local", value=ev_sel.get('local', LOCAL_PADRAO))
+                    c_sim, c_del = st.columns(2)
+                    if c_sim.form_submit_button("Confirmar Alteração"):
+                        iso = datetime.combine(nd, nh).isoformat()
+                        df_ev.loc[df_ev['id'].astype(str) == str(eid), ['title', 'start', 'end', 'local']] = [nt, iso, iso, nl]
                         df_ev.to_csv(ARQUIVO_CSV, index=False); st.rerun()
-                    if c2.form_submit_button("Excluir"):
+                    if c_del.form_submit_button("Excluir"):
                         df_ev[df_ev['id'].astype(str) != str(eid)].to_csv(ARQUIVO_CSV, index=False); st.rerun()
         else:
-            with st.form("novo_form"):
-                nt = st.text_input("Novo Evento")
+            with st.form("novo"):
+                nt = st.text_input("Evento")
                 nd = st.date_input("Data", format="DD/MM/YYYY")
                 nh = st.time_input("Hora")
+                nl = st.text_input("Local", value=LOCAL_PADRAO)
+                nc = st.selectbox("Categoria", ["Missa", "Batizado", "Reunião", "Social"])
                 if st.form_submit_button("Cadastrar") and nt:
                     iso = datetime.combine(nd, nh).isoformat()
-                    new_row = pd.DataFrame([{"id": str(random.randint(1000, 9999)), "title": nt, "start": iso, "end": iso, "color": "#3D9DF3"}])
-                    pd.concat([df_ev, new_row], ignore_index=True).to_csv(ARQUIVO_CSV, index=False); st.rerun()
+                    nid = str(random.randint(1000, 9999))
+                    nr = pd.DataFrame([{"id": nid, "title": nt, "start": iso, "end": iso, "color": "#3D9DF3", "categoria": nc, "local": nl}])
+                    pd.concat([df_ev, nr], ignore_index=True).to_csv(ARQUIVO_CSV, index=False); st.rerun()
 
 with tab_bingo:
-    st.header("🎲 Configurar Sorteio")
-    with st.expander("Informações do Bingo", expanded=True):
-        c1, c2 = st.columns(2)
-        with c1:
-            f_bingo = st.text_input("Título do Evento", "Festa de Nossa Senhora")
-            p_bingo = st.text_input("Prêmio Principal", "Um Garrote")
-            d_bingo = st.date_input("Data do Bingo", format="DD/MM/YYYY")
-        with c2:
-            q_bingo = st.number_input("Qtd de Cartelas", 1, 500, 50)
-            o_bingo = st.text_input("Observação na Cartela", "Não esqueça de levar a caneta!")
-            h_bingo = st.time_input("Hora do Sorteio")
-    
-    if st.button("🚀 Gerar Cartelas Personalizadas"):
-        pdf_b = gerar_pdf_bingo(q_bingo, f_bingo, d_bingo, h_bingo, p_bingo, o_bingo)
-        st.download_button("📥 Baixar PDF do Bingo", data=pdf_b, file_name="bingo_paroquia.pdf", mime="application/pdf")
+    st.header("🎲 Bingo Autenticado")
+    with st.expander("Configurar Sorteio", expanded=True):
+        col1, col2 = st.columns(2)
+        f_b = col1.text_input("Título", "Festa da Padroeira")
+        p_b = col1.text_input("Prêmio", "Cesta de Café")
+        d_b = col1.date_input("Data do Bingo", format="DD/MM/YYYY")
+        q_b = col2.number_input("Qtd Cartelas", 1, 500, 20)
+        o_b = col2.text_input("Observação", "Leve sua caneta!")
+        h_b = col2.time_input("Hora")
+    if st.button("🚀 Gerar Cartelas"):
+        pdf_b = gerar_pdf_bingo(q_b, f_b, d_b, h_b, p_b, o_b)
+        st.download_button("📥 Baixar Bingo", data=pdf_b, file_name="bingo.pdf", mime="application/pdf")
 
 with tab_admin:
-    st.subheader("🖨️ Agenda")
-    m_sel = st.selectbox("Mês", list(MESES_NOMES.keys()), index=datetime.now().month-1)
+    st.subheader("🖨️ Relatório Mensal")
+    m_s = st.selectbox("Mês", list(MESES_NOMES.keys()), index=datetime.now().month-1)
     if st.button("Gerar Agenda PDF"):
-        ev_m = [e for e in eventos_cal if datetime.fromisoformat(str(e['start'])).month == MESES_NOMES[m_sel]]
-        if ev_m: st.download_button(f"Baixar {m_sel}", data=gerar_pdf_agenda(ev_m, m_sel), file_name=f"agenda_{m_sel.lower()}.pdf", mime="application/pdf")
+        ev_m = [e for e in eventos_cal if datetime.fromisoformat(str(e['start'])).month == MESES_NOMES[m_s]]
+        if ev_m: st.download_button(f"Baixar {m_s}", data=gerar_pdf_agenda(ev_m, m_s), file_name="agenda.pdf", mime="application/pdf")
     st.markdown("---")
     st.dataframe(df_ev, width="stretch")
-    if st.button("🚨 LIMPAR TUDO"):
+    if st.button("🚨 LIMPAR TODOS OS DADOS"):
         if os.path.exists(ARQUIVO_CSV): os.remove(ARQUIVO_CSV); st.rerun()
