@@ -2,3 +2,4 @@ streamlit
 streamlit-calendar
 pandas
 fpdf2
+qrcode
