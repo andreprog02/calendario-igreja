@@ -9,6 +9,7 @@ import random
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão Paroquial - Dorândia", layout="wide", page_icon="⛪")
 
+# Estilização CSS para botões e layout
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -41,15 +42,16 @@ def obter_eventos_catolicos(ano):
         {"id": f"c2-{ano}", "title": "N. Sra. das Dores", "start": f"{ano}-09-15T19:00:00", "color": "#1A5276", "local": LOCAL_PADRAO},
     ]
 
-# --- GERAÇÃO DE PDF ---
+# --- GERAÇÃO DE PDF (COMPATÍVEL COM STREAMLIT CLOUD) ---
 def gerar_pdf_agenda(eventos, mes_nome):
     pdf = FPDF()
     pdf.add_page()
     
-    # Obtém o ano do primeiro evento da lista (ou o ano atual)
     ano_referencia = datetime.now().year
     if eventos:
-        ano_referencia = datetime.fromisoformat(str(eventos[0]['start'])).year
+        try:
+            ano_referencia = datetime.fromisoformat(str(eventos[0]['start'])).year
+        except: pass
 
     # Cabeçalho Oficial
     pdf.set_font("helvetica", "B", 14)
@@ -60,7 +62,6 @@ def gerar_pdf_agenda(eventos, mes_nome):
     pdf.ln(10)
     
     pdf.set_font("helvetica", "B", 12)
-    # AJUSTE AQUI: Inclusão do Ano no cabeçalho
     pdf.cell(190, 10, f"Programação Mensal: {mes_nome} / {ano_referencia}", align="L")
     pdf.ln(12)
     
@@ -86,7 +87,7 @@ def gerar_pdf_agenda(eventos, mes_nome):
         pdf.cell(70, 8, str(local_ev)[:40], border=1, align='L')
         pdf.ln()
         
-    return bytes(pdf.output())
+    return pdf.output()
 
 def gerar_pdf_bingo(quantidade, festa, data_b, hora_b):
     pdf = FPDF()
@@ -113,18 +114,16 @@ def gerar_pdf_bingo(quantidade, festa, data_b, hora_b):
             pdf.set_x(17.5)
             for letra in "BINGO":
                 if i == 2 and letra == 'N':
-                    pdf.set_font("helvetica", "B", 10)
-                    pdf.cell(35, 25, "LIVRE", border=1, align='C')
+                    pdf.set_font("helvetica", "B", 10); pdf.cell(35, 25, "LIVRE", border=1, align='C')
                 else:
-                    pdf.set_font("helvetica", "B", 30)
-                    pdf.cell(35, 25, str(nums[letra][i]), border=1, align='C')
+                    pdf.set_font("helvetica", "B", 30); pdf.cell(35, 25, str(nums[letra][i]), border=1, align='C')
             pdf.ln()
         pdf.set_font("helvetica", "I", 8)
         pdf.cell(190, 10, f"Cód. Autenticidade: {random.randint(100000, 999999)}", align="R")
         
-    return bytes(pdf.output())
+    return pdf.output()
 
-# --- INTERFACE ---
+# --- INTERFACE PRINCIPAL ---
 df_ev = carregar_eventos_manuais()
 eventos_cal = df_ev.to_dict('records') + obter_eventos_catolicos(datetime.now().year)
 
@@ -142,9 +141,9 @@ with tab_cal:
         if state.get("eventClick"):
             eid = state["eventClick"]["event"]["id"]
             if str(eid).startswith('c'):
-                st.info("Evento padrão.")
+                st.info("Evento litúrgico padrão.")
             else:
-                st.subheader("🛠️ Editar")
+                st.subheader("🛠️ Editar Atividade")
                 ev_data = df_ev[df_ev['id'].astype(str) == str(eid)].iloc[0]
                 with st.form("edit_form"):
                     novo_t = st.text_input("Nome", value=ev_data['title'])
@@ -154,7 +153,7 @@ with tab_cal:
                     c1, c2 = st.columns(2)
                     with c1: 
                         st.markdown('<div class="btn-salvar">', unsafe_allow_html=True)
-                        save = st.form_submit_button("Salvar")
+                        save = st.form_submit_button("Confirmar")
                         st.markdown('</div>', unsafe_allow_html=True)
                     with c2:
                         st.markdown('<div class="btn-excluir">', unsafe_allow_html=True)
@@ -168,7 +167,7 @@ with tab_cal:
                         df_ev = df_ev[df_ev['id'].astype(str) != str(eid)]
                         df_ev.to_csv(ARQUIVO_CSV, index=False); st.rerun()
         else:
-            st.subheader("📝 Novo")
+            st.subheader("📝 Novo Evento")
             with st.form("novo_form"):
                 nt = st.text_input("Nome")
                 nd = st.date_input("Data", format="DD/MM/YYYY")
@@ -185,26 +184,30 @@ with tab_cal:
                 st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_bingo:
-    st.header("🎲 Bingo")
+    st.header("🎲 Bingo de Dorândia")
     c1, c2 = st.columns(2)
     with c1:
         f_bingo = st.text_input("Evento", "Festa da Padroeira")
-        d_bingo = st.date_input("Sorteio", format="DD/MM/YYYY")
+        d_bingo = st.date_input("Data Sorteio", format="DD/MM/YYYY")
     with c2:
         q_bingo = st.number_input("Cartelas", 1, 500, 50)
-        h_bingo = st.time_input("Hora")
-    if st.button("🚀 Gerar Bingo"):
+        h_bingo = st.time_input("Horário")
+    
+    st.markdown('<div class="btn-geral">', unsafe_allow_html=True)
+    if st.button("🚀 Gerar Cartelas"):
         pdf_b = gerar_pdf_bingo(q_bingo, f_bingo, d_bingo, h_bingo)
-        st.download_button("📥 Baixar PDF", pdf_b, "bingo.pdf", "application/pdf")
+        st.download_button("📥 Baixar PDF do Bingo", pdf_b, "bingo_dorandia.pdf", "application/pdf")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_admin:
-    st.subheader("🖨️ Imprimir Agenda")
+    st.subheader("🖨️ Relatório de Agenda")
     m_sel = st.selectbox("Mês", list(MESES_NOMES.keys()), index=datetime.now().month-1)
-    if st.button("Gerar Agenda"):
+    if st.button("Gerar Agenda Mensal"):
         ev_m = [e for e in eventos_cal if datetime.fromisoformat(str(e['start'])).month == MESES_NOMES[m_sel]]
         if ev_m: 
-            st.download_button(f"Baixar {m_sel}", gerar_pdf_agenda(ev_m, m_sel), f"agenda_{m_sel.lower()}.pdf", "application/pdf")
+            pdf_out = gerar_pdf_agenda(ev_m, m_sel)
+            st.download_button(f"Baixar Agenda de {m_sel}", pdf_out, f"agenda_{m_sel.lower()}.pdf", "application/pdf")
     st.markdown("---")
     st.dataframe(df_ev, width="stretch")
-    if st.button("🚨 LIMPAR TUDO"):
+    if st.button("🚨 LIMPAR TODOS OS DADOS"):
         if os.path.exists(ARQUIVO_CSV): os.remove(ARQUIVO_CSV); st.rerun()
