@@ -9,7 +9,7 @@ import random
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Gestão Paroquial - Dorândia", layout="wide", page_icon="⛪")
 
-# Estilização CSS para botões e layout
+# Estilização CSS
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -42,7 +42,7 @@ def obter_eventos_catolicos(ano):
         {"id": f"c2-{ano}", "title": "N. Sra. das Dores", "start": f"{ano}-09-15T19:00:00", "color": "#1A5276", "local": LOCAL_PADRAO},
     ]
 
-# --- GERAÇÃO DE PDF (COMPATÍVEL COM STREAMLIT CLOUD) ---
+# --- GERAÇÃO DE PDF (AJUSTADO PARA BYTES NO STREAMLIT CLOUD) ---
 def gerar_pdf_agenda(eventos, mes_nome):
     pdf = FPDF()
     pdf.add_page()
@@ -53,7 +53,6 @@ def gerar_pdf_agenda(eventos, mes_nome):
             ano_referencia = datetime.fromisoformat(str(eventos[0]['start'])).year
         except: pass
 
-    # Cabeçalho Oficial
     pdf.set_font("helvetica", "B", 14)
     pdf.cell(190, 8, "Agenda Paróquia Nossa Senhora das Dores", align="C")
     pdf.ln(8)
@@ -65,7 +64,6 @@ def gerar_pdf_agenda(eventos, mes_nome):
     pdf.cell(190, 10, f"Programação Mensal: {mes_nome} / {ano_referencia}", align="L")
     pdf.ln(12)
     
-    # Tabela
     pdf.set_font("helvetica", "B", 10)
     pdf.set_fill_color(230, 230, 230)
     pdf.cell(30, 10, "DATA", border=1, align='C', fill=True)
@@ -87,7 +85,8 @@ def gerar_pdf_agenda(eventos, mes_nome):
         pdf.cell(70, 8, str(local_ev)[:40], border=1, align='L')
         pdf.ln()
         
-    return pdf.output()
+    # CONVERSÃO EXPLÍCITA PARA BYTES (CORREÇÃO DO ERRO)
+    return bytes(pdf.output())
 
 def gerar_pdf_bingo(quantidade, festa, data_b, hora_b):
     pdf = FPDF()
@@ -121,7 +120,8 @@ def gerar_pdf_bingo(quantidade, festa, data_b, hora_b):
         pdf.set_font("helvetica", "I", 8)
         pdf.cell(190, 10, f"Cód. Autenticidade: {random.randint(100000, 999999)}", align="R")
         
-    return pdf.output()
+    # CONVERSÃO EXPLÍCITA PARA BYTES (CORREÇÃO DO ERRO)
+    return bytes(pdf.output())
 
 # --- INTERFACE PRINCIPAL ---
 df_ev = carregar_eventos_manuais()
@@ -178,7 +178,7 @@ with tab_cal:
                 if st.form_submit_button("Cadastrar") and nt:
                     iso = datetime.combine(nd, nh).isoformat()
                     nid = str(random.randint(1000, 9999))
-                    cor = {"Missa": "#FF4B4B", "Batizado": "#7FB3D5"}.get(nc, "#3D9DF3")
+                    cor = {"Missa": "#FF4B4B", "Batizado": "#7FB3D5", "Catequese": "#28a745"}.get(nc, "#3D9DF3")
                     new_row = pd.DataFrame([{"id": nid, "title": nt, "start": iso, "end": iso, "color": cor, "categoria": nc, "local": nl}])
                     pd.concat([df_ev, new_row], ignore_index=True).to_csv(ARQUIVO_CSV, index=False); st.rerun()
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -196,7 +196,7 @@ with tab_bingo:
     st.markdown('<div class="btn-geral">', unsafe_allow_html=True)
     if st.button("🚀 Gerar Cartelas"):
         pdf_b = gerar_pdf_bingo(q_bingo, f_bingo, d_bingo, h_bingo)
-        st.download_button("📥 Baixar PDF do Bingo", pdf_b, "bingo_dorandia.pdf", "application/pdf")
+        st.download_button("📥 Baixar PDF do Bingo", data=pdf_b, file_name="bingo_dorandia.pdf", mime="application/pdf")
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab_admin:
@@ -206,7 +206,7 @@ with tab_admin:
         ev_m = [e for e in eventos_cal if datetime.fromisoformat(str(e['start'])).month == MESES_NOMES[m_sel]]
         if ev_m: 
             pdf_out = gerar_pdf_agenda(ev_m, m_sel)
-            st.download_button(f"Baixar Agenda de {m_sel}", pdf_out, f"agenda_{m_sel.lower()}.pdf", "application/pdf")
+            st.download_button(f"Baixar Agenda de {m_sel}", data=pdf_out, file_name=f"agenda_{m_sel.lower()}.pdf", mime="application/pdf")
     st.markdown("---")
     st.dataframe(df_ev, width="stretch")
     if st.button("🚨 LIMPAR TODOS OS DADOS"):
